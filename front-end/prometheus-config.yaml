@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: twitter-environment
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+
+    scrape_configs:
+      # Target 1: Machine infrastructure statistics
+      - job_name: 'node-exporter'
+        static_configs:
+          - targets: ['node-exporter-service:9100']
+
+      # # Target 2: Your Node.js backend application performance
+      # - job_name: 'twitter-backend'
+      #   metrics_path: '/api/metrics' # Match your express route code entry
+      #   static_configs:
+      #     - targets: ['twitter-backend-service:5000']

@@ -1,0 +1,216 @@
+
+# Creating Name space for Twitter Application
+apiVersion: v1 
+kind: Namespace
+metadata:
+  name: twitter
+
+---
+# Secrets for Twitter Application
+apiVersion: v1
+kind: Secret
+metadata:
+  name: twitter-secrets
+  namespace: twitter
+type: Opaque
+data:
+  MONGO_URI: "bW9uZ29kYitzcnY6Ly9kaGluZXNoZGluZTE4OkRoaW5lc2hfMTVAdHdpdHRlci5ybmRpOWRhLm1vbmdvZGIubmV0Lz9hcHBOYW1lPVR3aXR0ZXIK"
+  CLOUDINARY_CLOUD_NAME: "ZGhpbmVzaGRpbmUK"
+  CLOUDINARY_API_KEY: NDM2NDI5NjYxOTE4MzE1
+  CLOUDINARY_API_SECRET: S2I0TUtHazcxbTJmYVlYRk9JVFhGY2ZabUlB
+  JWT_SECRET: TXlTdXBlclNlY3JldFR3aXR0ZXJLZXkxMjM=
+---
+
+# 3. NGINX REVERSE PROXY CONFIGURATION
+# ==========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: twitter
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name localhost;
+
+        # Route 1: Serve Frontend static web files
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Route 2: Intercept and reverse-proxy /api traffic directly to backend pods
+        location /api {
+            proxy_pass http://twitter-backend-service:5000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+        }
+    }
+---
+
+
+
+# 4. TWITTER BACKEND ENGINE
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: twiter-backend
+  namespace: twitter-environment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: twitter-backend
+  template:
+    metadata:
+      labels:
+        app: twitter-backend
+    spec:
+      containers:
+      - name: backend-container
+        image: dhineshdine/twitter-clone-backend
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: twitter-secrets
+              key: MONGO_URI
+        - name: CLOUDINARY_CLOUD_NAME
+          valueFrom:
+            secretKeyRef:
+              name: twitter-secrets
+              key: CLOUDINARY_CLOUD_NAME
+        - name: CLOUDINARY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: twitter-secrets
+              key: CLOUDINARY_API_KEY
+        - name: CLOUDINARY_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: twitter-secrets
+              key: CLOUDINARY_API_SECRET
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: twitter-secrets
+              key: JWT_SECRET
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: twitter-backend-service
+  namespace: twitter-environment
+spec:
+  type: ClusterIP
+  selector:
+    app: twitter-backend
+  ports:
+  - port: 5000
+    targetPort: 5000
+---
+# ==========================================
+# 5. TWITTER FRONTEND INTERFACE
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: twitter-frontend
+  namespace: twitter-environment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: twitter-frontend
+  template:
+    metadata:
+      labels:
+        app: twitter-frontend
+    spec:
+      containers:
+      - name: twitter-frontend-container
+        image: dhineshdine/twitter-clone-frontend:v1
+        ports:
+        - containerPort: 80
+        env:
+        # Changes target URL to relative path to trigger local Nginx rule routing
+        - name: REACT_APP_BACKEND_URL
+          value: "/api"
+        volumeMounts:
+        # Overwrite default container configuration with our custom ConfigMap routing
+        - name: config-volume
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+      volumes:
+      - name: config-volume
+        configMap:
+          name: nginx-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: twitter-frontend-service
+  namespace: twitter-environment
+spec:
+  type: NodePort # Replaced LoadBalancer for instant sandbox execution
+  selector:
+    app: twitter-frontend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 32000 # Explicitly bind to port 32000
+---
+# ==========================================
+# 6. NETWORK ISOLATION RULES
+# ==========================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-policy
+  namespace: twitter-environment
+spec:
+  podSelector:
+    matchLabels:
+      app: twitter-frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - {}
+  egress:
+  - {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-policy
+  namespace: twitter-environment
+spec:
+  podSelector:
+    matchLabels:
+      app: twitter-backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: twitter-frontend
+    ports:
+    - protocol: TCP
+      port: 5000
+  egress:
+  - {}
+
+    
+ 

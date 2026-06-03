@@ -1,0 +1,9 @@
+services:
+  twitter-backend:
+    build: .           # Build from current directory (where Dockerfile exists)
+    container_name: twitter-backend
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    restart: unless-stopped

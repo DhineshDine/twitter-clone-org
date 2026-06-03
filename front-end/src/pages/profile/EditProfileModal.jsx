@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FaLink, FaPlus } from "react-icons/fa";
 import useUpdateUserProfile from "../../hooks/useUpdateUserProfile.jsx";
 
 const EditProfileModal = ({authUser}) => {
@@ -7,16 +8,28 @@ const EditProfileModal = ({authUser}) => {
 		username: "",
 		email: "",
 		bio: "",
-		link: "",
 		newPassword: "",
 		currentPassword: "",
 	});
+	const [websiteInput, setWebsiteInput] = useState("");
+	const [linkUrls, setLinkUrls] = useState([]);
 
 
 	const {updateProfile, isUpdatingProfile} = useUpdateUserProfile();
 
 	const handleInputChange = (e) => {
 		setFormData({ ...formData, [e.target.name]: e.target.value });
+	};
+
+	const handleAddWebsite = () => {
+		const value = websiteInput.trim();
+		if (!value) return;
+		setLinkUrls((prev) => [...prev, value]);
+		setWebsiteInput("");
+	};
+
+	const handleRemoveWebsite = (index) => {
+		setLinkUrls((prev) => prev.filter((_, idx) => idx !== index));
 	};
 
 	useEffect(()=>{
@@ -26,10 +39,14 @@ const EditProfileModal = ({authUser}) => {
 				username: authUser.username,
 				email: authUser.email,
 				bio: authUser.bio,
-				link: authUser.link,
 				newPassword: "",
 				currentPassword:""
-			})
+			});
+
+			const urls = authUser.link
+				? authUser.link.split(",").map((url) => url.trim()).filter(Boolean)
+				: [];
+			setLinkUrls(urls);
 		}
 	},[authUser])
 
